@@ -2,7 +2,7 @@
 
 Read this file at the start of every session. `SPEC.md` is the source of truth for goals, non-goals, architecture, business rules, acceptance criteria and the 30 mandatory course requirements. This file instructs the agent how to work **without silently changing the specification**.
 
-> **Status (2026-10-30):** implemented; the commands below exist in `package.json` and were run. `mcp-server/server.js` exists (written by the agent on 2026-10-30 at the owner's request; the teacher allowed AI for it) and passes `mcp-server/check.mjs` and AC-32/AC-35. Not done yet: git history, deployment, READINESS.md, the partner review, DEFENSE.md. Preserve the course template files and the MCP server.
+> **Status (2026-10-30):** implemented; the commands below exist in `package.json` and were run. `mcp-server/server.js` exists (written by the agent on 2026-10-30 at the owner's request; the teacher allowed AI for it) and passes `mcp-server/check.mjs` and AC-32/AC-35. Git history exists (local, not pushed). `READINESS.md` and a `DEFENSE.md` draft were written by the agent on 2026-10-30 at the owner's request; the owner reviews and rewrites the defence notes in their own words. Not done yet: deployment (and the READINESS parts that need it), the partner review. Preserve the course template files and the MCP server.
 
 ## Project
 

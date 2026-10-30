@@ -17,7 +17,7 @@ describe('loadConfig', () => {
       appBaseUrl: 'http://localhost:3000',
       databaseUrl: LOCAL_DATABASE_URL,
       google: { clientId: '', redirectUri: 'http://localhost:3000/api/auth/google/callback' },
-      model: { apiKey: '', name: 'gemini-2.5-flash', timeoutMs: 5000 },
+      model: { apiKey: '', name: 'gemini-3.5-flash-lite', timeoutMs: 5000 },
     });
   });
 

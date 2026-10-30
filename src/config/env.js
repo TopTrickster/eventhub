@@ -35,7 +35,7 @@ export function loadConfig(env = process.env) {
     },
     model: {
       apiKey: env.GEMINI_API_KEY || '',
-      name: env.MODEL_NAME || 'gemini-2.5-flash',
+      name: env.MODEL_NAME || 'gemini-3.5-flash-lite',
       timeoutMs: 5000,
     },
   };

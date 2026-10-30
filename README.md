@@ -59,7 +59,8 @@ npm run coverage          # + праг 80% общо и 100% за src/services
 
 `Dockerfile` (build на клиента, после само production зависимости) и `render.yaml` за Render;
 базата е Neon (`DATABASE_URL` с `?sslmode=require`). Миграциите се пускат при старт на контейнера.
-Тайните се задават в Render/Codespaces, никога в git.
+Тайните се задават в Render/Codespaces, никога в git. Какво е проверено за production и какво
+още липсва: [`READINESS.md`](READINESS.md).
 
 ## Курсови проверки
 

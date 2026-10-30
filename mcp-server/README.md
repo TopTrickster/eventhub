@@ -81,5 +81,41 @@ Self-check: `node mcp-server/check.mjs -- node mcp-server/server.js` (on Windows
 ## Session transcript
 <!-- Paste one full session: initialize, the reply, tools/list, one good tools/call, one that fails. -->
 
+Recorded on 30.10.2026 with `node mcp-server/server.js`. The first five messages of
+`messages.jsonl` were sent one line at a time, each after the reply to the one before. Lines
+starting with `$` are what went into stdin. The first line is the server's stderr, and the other
+lines are its stdout. The notification gets no reply, as it should.
+
+```text
+EventHub MCP server: waiting for JSON-RPC messages on stdin (Ctrl+C stops it).
+$ {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"course-check","version":"1.0.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"eventhub","version":"0.1.0"}}}
+$ {"jsonrpc":"2.0","method":"notifications/initialized"}
+$ {"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"find_lecture","description":"Returns the title and topics of one Web Development course lecture by its number (1 to 10). Use it when asked what a given lecture covers.","inputSchema":{"type":"object","properties":{"number":{"type":"integer","description":"The lecture number, from 1 to 10."}},"required":["number"],"additionalProperties":false}},{"name":"search_lectures","description":"Finds the course lectures whose title or topics mention a word or phrase, such as \"testing\" or \"OAuth\". Use it when the lecture number is not known.","inputSchema":{"type":"object","properties":{"query":{"type":"string","minLength":2,"maxLength":100,"description":"A word or phrase to look for."}},"required":["query"],"additionalProperties":false}},{"name":"upcoming_events","description":"Lists the EventHub club events that have not started yet, soonest first, with club, place, start time and free seats. Use it when asked what events are coming up.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},{"name":"my_registrations","description":"Lists the upcoming EventHub events the signed-in user is registered for. It only ever shows that user’s own registrations.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}},{"name":"register_for_event","description":"Registers the signed-in user for one upcoming EventHub event if a seat is still free. Fails with a readable message when the event is full, past or already booked.","inputSchema":{"type":"object","properties":{"event_id":{"type":"string","format":"uuid","description":"The id of the event, as upcoming_events returns it."}},"required":["event_id"],"additionalProperties":false}},{"name":"cancel_registration","description":"Cancels the signed-in user’s own registration for one EventHub event and frees the seat. It cannot touch anybody else’s registration.","inputSchema":{"type":"object","properties":{"event_id":{"type":"string","format":"uuid","description":"The id of the event, as upcoming_events returns it."}},"required":["event_id"],"additionalProperties":false}},{"name":"suggest_event_draft","description":"Organizers only: turns one line of text into a suggested event title, summary and category. Nothing is saved; dates, place and seats are left to the organizer.","inputSchema":{"type":"object","properties":{"text":{"type":"string","minLength":10,"maxLength":500,"description":"What the event is about, in a sentence."}},"required":["text"],"additionalProperties":false}}]}}
+$ {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find_lecture","arguments":{"number":5}}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Lecture 5: What the agent built, part 1\nTopics: HTTP, REST vs GraphQL, data modeling, ORM, layers"}]}}
+$ {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find_lecture","arguments":{"number":99}}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"There is no lecture 99. The course has lectures 1 to 10."}],"isError":true}}
+```
+
+The last call is a tool error (`isError: true`) rather than a protocol error: the request was
+valid, and lecture 99 just does not exist.
+
 ## The description experiment
 <!-- Three sentences: what you changed in the description, whether the model chose the tool differently, and why you think so. -->
+
+I changed only the description of `find_lecture` from "Returns the title and topics of one Web
+Development course lecture by its number (1 to 10). Use it when asked what a given lecture covers."
+to the vague "Lecture data.", and asked "What does lecture 7 cover?". The model did not choose
+differently: it called `find_lecture({"number":7})` in 5 of 5 runs before the change and 5 of 5 after.
+I think the description was not what it relied on, because the tool's name and its `number`
+parameter ("The lecture number, from 1 to 10.") still say what it does, and the question gives a
+number.
+
+How it was run, on 30.10.2026: Gemini CLI is not installed on this machine, so a script started
+`server.js`, took its `tools/list` reply, and offered those 7 tools as function declarations to
+`gemini-3.5-flash-lite` through the Gemini API. It counted which tool the model asked for, and
+the tools were not executed. The description was changed in `server.js` and restored afterwards.
+Tokens: 2,955 input and 70 output for the 5 runs before the change, 2,815 and 70 after (see
+`USAGE.md`).
