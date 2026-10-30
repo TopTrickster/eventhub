@@ -1,0 +1,27 @@
+# Render blueprint: one web service built from the Dockerfile. The database is Neon
+# (Render's free plan has no persistent disk), so DATABASE_URL is the Neon connection
+# string with ?sslmode=require. `sync: false` means "ask in the dashboard": no value
+# here, none in git.
+services:
+  - type: web
+    name: eventhub
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: APP_BASE_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MODEL_NAME
+        value: gemini-2.5-flash

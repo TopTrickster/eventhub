@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.pgdata
+.git
+.env
+.env.*
+!.env.example
+tests
+docs
+.github
+.devcontainer
+.vscode
+.gemini
