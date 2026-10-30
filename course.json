@@ -5,5 +5,5 @@
   "mcp": "npm run mcp",
 
   "//liveUrl": "Exercise 4. Where your deployed application answers, with no trailing slash.",
-  "liveUrl": ""
+  "liveUrl": "https://eventhub-5wcj.onrender.com"
 }

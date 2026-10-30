@@ -34,6 +34,8 @@ describe('deployment', () => {
     expect(readFileSync('src/config/env.js', 'utf8')).toMatch(/isProduction && !env\.DATABASE_URL/);
   });
 
+  // A free Render service that has been asleep can take close to a minute to answer, so this
+  // test gets as long as its fetch rather than the 20 s default.
   it.skipIf(!LIVE_URL)('AC-20 checks public deployment and database persistence', async () => {
     expect(LIVE_URL.startsWith('https://')).toBe(true);
     const health = await fetch(`${LIVE_URL}/health`, { signal: AbortSignal.timeout(90_000) });
@@ -41,7 +43,7 @@ describe('deployment', () => {
     expect(await health.json()).toEqual({ status: 'ok', database: 'ok' });
     const page = await fetch(LIVE_URL);
     expect(await page.text()).toContain('<title>EventHub');
-  });
+  }, 100_000);
 
   it.skipIf(!LIVE_URL || !accounts)('AC-43 demonstrates production user flows and fallback', async () => {
     const student = await signIn(env.SMOKE_STUDENT_EMAIL, env.SMOKE_STUDENT_PASSWORD);

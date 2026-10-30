@@ -46,3 +46,19 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Went wrong: the first fallback test showed `?????` in the title, because curl in Git Bash sent the Cyrillic argument in the wrong encoding. Re-sending the same JSON from a UTF-8 file gave the right text, so the app was fine. The experiment found no difference (5/5 both times), because the tool name and the `number` parameter still describe the tool. Writing the report surfaced a real gap: the database pool has no connection timeout (`READINESS.md`, gap 2). It is listed and not fixed.
 - Checked: `npx vitest run` 122 passed, 2 skipped (AC-20/AC-43, live); `npm run coverage` passed its gates (98.7% statements, 96.3% branches). `node checks/ex4.mjs` 27/29: `liveUrl` is empty until deployment, and ".env is committed" fires only because the file exists on disk; git shows it was never committed.
 - Changed by hand: nothing in this session.
+
+## 2026-10-30 · Deployment to Render and Neon
+- Goal: put EventHub online at a public HTTPS address, with the database on Neon.
+- Delegated: the agent wrote the step-by-step guide and checked each step from outside with `curl` (`/health`, the Google `redirect_uri`, the `http://` → `https://` redirect, the sign-in cookie flags). It set `liveUrl` in `course.json`, ran `checks/ex4.mjs` and the live tests, and updated `READINESS.md`. It also gave the live AC-20 test a 100 s limit, because its fetch already allowed 90 s while the test had the 20 s default, and a sleeping free Render service can be slower than that.
+- Checkpoints: the agent did not sign in to the production site and never saw the demo password. The author ran the seed and the live user-flow test in their own shell. To find the Google problem, a script loaded the Google client ID and secret from `.env` without printing them. It sent them to Google's token endpoint with a made-up code, which showed the pair was valid. It also compared the full client ID with the public one the live site sends to Google.
+- Went wrong:
+  - `render.yaml` sets no region, so the service was created in Oregon before the region question was answered.
+  - `APP_BASE_URL` was first set to `https://eventhub.onrender.com`, which is another person's site; the service got `eventhub-5wcj`. Google sign-in would have sent users there. It was fixed in Render's Environment.
+  - Google sign-in then failed with `[oauth] code_rejected`, because Render's `GOOGLE_CLIENT_SECRET` was not exactly the `.env` value. It worked after the author re-entered it. The log did not say Google's reason, which made this slow to find (`READINESS.md`, gap 10).
+  - The author did not keep the production seed password. Running the seed again with a new `SEED_PASSWORD` replaced it.
+- Checked: live `/health` 200 with the database ok; `http://` answers 301 to `https://`; `node checks/ex4.mjs` 33/34 (only the local `.env` file). `npx vitest run tests/smoke` 3/3 against the live URL, AC-20 and AC-43. The author ran it with the demo accounts in the `SMOKE_*` variables; the first two tries skipped AC-43 because the variables were not set in that terminal. The author signed in with `organizer1` and with Google on the live site.
+- Changed by hand, by the author:
+  - Created the Neon project and the Render Blueprint, and filled in the environment variables.
+  - Corrected `APP_BASE_URL` and `GOOGLE_CLIENT_SECRET` on Render.
+  - Added the live redirect URI in Google Cloud.
+  - Seeded Neon twice from their own PowerShell.

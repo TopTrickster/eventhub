@@ -8,7 +8,8 @@ parts that need the deployment are marked **Not checked yet** and listed as gap 
 
 ## 1. Live URL and how to verify it
 
-- **URL:** not deployed yet. It goes here and in `course.json` (`liveUrl`) once Render is set up.
+- **URL:** **https://eventhub-5wcj.onrender.com** (Render web service from `render.yaml`, Oregon, free
+  plan; database on Neon). It is also in `course.json` (`liveUrl`).
 - **Quick check 1:** `curl <live URL>/health` must answer `200` and `{"status":"ok","database":"ok"}`.
   If the database is unreachable it answers `503` and `{"status":"degraded","database":"unavailable"}`.
 - **Quick check 2:** open the URL, sign in with a demo account, and see the three seeded events on
@@ -16,7 +17,19 @@ parts that need the deployment are marked **Not checked yet** and listed as gap 
 - **Quick check 3:** `node checks/ex4.mjs` reads `liveUrl` and checks the deployment itself.
 - How I checked (locally, 30.10.2026): with a working database `/health` answered
   `200 {"status":"ok","database":"ok"}`. With `DATABASE_URL` pointed at a closed port it answered
-  `503 {"status":"degraded","database":"unavailable"}`. Not checked yet on the live URL.
+  `503 {"status":"degraded","database":"unavailable"}`.
+- How I checked (live, 30.10.2026):
+  - `curl https://eventhub-5wcj.onrender.com/health` answered `200 {"status":"ok","database":"ok"}`
+    in 0.4 s while the service was awake.
+  - `node checks/ex4.mjs` passed 33 of 34. The live checks pass: `/health` 200 and the site serves a
+    page. The one failure is the local `.env` file on disk (it is git-ignored and was never committed).
+  - `npx vitest run tests/smoke`, run by the author with the demo accounts in the `SMOKE_*`
+    variables: **3 of 3 passed**.
+    - AC-20: the public deployment and the database.
+    - AC-43, in 7.8 s: `student1` lists events, registers for one with a free seat and cancels again,
+      and `organizer1` gets an AI draft (`model` or `fallback`).
+  - The author signed in on the live site with `organizer1` and with their Google account. Google
+    sign-in worked only after two configuration fixes (section 3, last row).
 
 ## 2. Environment variables
 
@@ -51,6 +64,7 @@ parts that need the deployment are marked **Not checked yet** and listed as gap 
 | **Event full / many people racing for the last seat** | „Няма свободни места“ on the event; the server's sentence for a full event. | `tests/data/concurrency.test.js` (AC-7: concurrent registrations never go over capacity); `tests/ui/states.test.jsx` „a full event answers with the server’s sentence“. |
 | **Model provider down or slow** | Section 8: the yellow fallback note, and the form keeps working. | Section 8. |
 | **Google sign-in fails or is cancelled** | Back on `/login` with a sentence saying why. | `tests/ui/states.test.jsx` „/login explains why a Google sign-in came back“; `tests/services/oauth.test.js` (AC-24 unverified email is refused). |
+| **Wrong Google settings in production** (happened on 30.10.2026) | `/login?error=google_failed`: „Входът с Google не беше завършен. Опитайте отново.“ The app kept working, and password sign-in was not affected. | It happened for real on the first deploy. First, `APP_BASE_URL` pointed at `eventhub.onrender.com`, which is another site, so Google would have sent people there. `curl` on `/api/auth/google` showed the wrong `redirect_uri`; it was fixed in Render's Environment. Second, Render's log showed `[oauth] code_rejected`. The `.env` pair was valid (Google's token endpoint answered `invalid_grant`, not `invalid_client`, to a made-up code), and Render used the same client ID. The author re-entered `GOOGLE_CLIENT_SECRET` on Render, and Google sign-in then worked. |
 
 ## 4. Four states of one screen
 
@@ -102,10 +116,14 @@ transfer size, so nothing came from the cache.
   A Gemini key and the Google client secret were shown in chat screenshots on 30.10.2026 (never in
   a file in git). The author replaced both that day and deleted the old ones in AI Studio and the
   Google Cloud console.
-- **HTTPS everywhere:** **Not checked yet**, because it needs the deployment. Render terminates TLS
-  for `*.onrender.com`. The app trusts one proxy hop in production, so `req.protocol` is right,
-  and the session cookie is `Secure`, so the browser never sends it over plain HTTP. To do: open the
-  `http://` address and see that it redirects to `https://`.
+- **HTTPS everywhere:**
+  - `curl -I http://eventhub-5wcj.onrender.com/` answered `301 Moved Permanently` with
+    `Location: https://eventhub-5wcj.onrender.com/`, so plain HTTP only redirects.
+  - The live sign-in cookie for Google (`eh_oauth`) came back `HttpOnly; Secure; SameSite=Lax`, from
+    `curl -D -` on `/api/auth/google`.
+  - The Google redirect URI the app sends is `https://eventhub-5wcj.onrender.com/api/auth/google/callback`.
+  - The app trusts one proxy hop in production, so `req.protocol` is right. The session cookie is
+    `Secure`, so the browser never sends it over plain HTTP.
 - **Every write endpoint refuses a visitor who is not signed in** (`401`). How I checked: curl without
   a cookie against the local production build: `POST /api/events`, `PATCH` and `DELETE /api/events/:id`,
   `POST` and `DELETE /api/events/:id/registrations(/me)`, `POST /api/clubs`, `POST /api/ai/event-draft`,
@@ -140,10 +158,12 @@ transfer size, so nothing came from the cache.
 
 ## 7. Known gaps, ranked by risk
 
-1. **The deployment is not done, so HTTPS, rollback and the live checks are unverified.** AC-20 and
-   AC-43 are skipped until there is a live URL. Next step: Neon + Render blueprint, the Render redirect
-   URI in Google, seed Neon, set `liveUrl`, then repeat sections 1, 3 (rollback), 5 and 6 (HTTPS) on
-   the live URL.
+1. **Parts of the deployment are still unchecked.** It is live, and AC-20, AC-43, HTTPS and `/health`
+   pass, but these are not done yet:
+   - the bad-deploy and rollback test (section 3);
+   - the waterfall on the live URL (section 5).
+
+   Next step: do both, and record the time Render takes to wake up after 15 minutes idle.
 2. **A database that hangs, instead of refusing, makes requests wait with no limit.** `createPool` in
    `src/data/db.js` sets no `connectionTimeoutMillis`, and the `pg` default is no timeout. Section 3 only
    tested a refused connection, which fails at once. If Neon stops answering, the user sees the
@@ -172,6 +192,11 @@ transfer size, so nothing came from the cache.
 9. **The model is sometimes slower than the 5 s limit.** That happened in 2 of 12 calls on 30.10.2026.
    The user then gets the fallback (section 8). That is by design, but it is visible. Next step: count
    fallbacks in the logs after deployment and decide whether the limit or the model should change.
+10. **Configuration values are used exactly as typed, and the Google error in the log is vague.** A
+    stray space or line break in `GOOGLE_CLIENT_SECRET` breaks Google sign-in. The log then says only
+    `[oauth] code_rejected`, not Google's own reason (`invalid_client` or `invalid_grant`). That cost
+    time on 30.10.2026. Next step: trim the values in `src/config/env.js` and add Google's error code
+    to the log line, with a test.
 
 ## 8. Model feature
 
