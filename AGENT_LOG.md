@@ -57,6 +57,14 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
   - Google sign-in then failed with `[oauth] code_rejected`, because Render's `GOOGLE_CLIENT_SECRET` was not exactly the `.env` value. It worked after the author re-entered it. The log did not say Google's reason, which made this slow to find (`READINESS.md`, gap 10).
   - The author did not keep the production seed password. Running the seed again with a new `SEED_PASSWORD` replaced it.
 - Checked: live `/health` 200 with the database ok; `http://` answers 301 to `https://`; `node checks/ex4.mjs` 33/34 (only the local `.env` file). `npx vitest run tests/smoke` 3/3 against the live URL, AC-20 and AC-43. The author ran it with the demo accounts in the `SMOKE_*` variables; the first two tries skipped AC-43 because the variables were not set in that terminal. The author signed in with `organizer1` and with Google on the live site.
+- Rollback drill:
+  - The author set the wrong `APP_BASE_URL` again and deployed it; it was live at 23:27.
+  - Then they used Render's Dashboard **Rollback**, which was live by 23:29:48, in under a minute.
+  - An agent script checked `/health` and the Google `redirect_uri` every 5 s throughout. `/health` stayed ok in all 51 checks.
+  - The agent first planned to break `DATABASE_URL`. Render's rollback docs say a rollback restores the earlier deploy's build and environment variables, and a wrong `APP_BASE_URL` can be seen from outside, so the drill used that instead.
+  - A Dashboard rollback turns Auto-Deploy off, so the author has to set it back.
+  - The drill showed that a broken setting passes `/health` and goes live (`READINESS.md`, gap 1).
+- Live waterfall: from the author's Firefox DevTools screenshot. It showed 6 requests, Finish ≈ 2.3 s, and the JS compressed by Render from 294 kB to 93 kB. It also showed that `/favicon.ico` returns the HTML page.
 - Changed by hand, by the author:
   - Created the Neon project and the Render Blueprint, and filled in the environment variables.
   - Corrected `APP_BASE_URL` and `GOOGLE_CLIENT_SECRET` on Render.

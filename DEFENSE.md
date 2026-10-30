@@ -92,7 +92,8 @@ edited or deleted (`403`). Last, as `organizer1`, use „Предложи с AI�
 - **Tests.** Every acceptance criterion `AC-1`…`AC-48` in `SPEC.md` has a test with its id in the
   name (`tests/project/traceability.test.js` checks that). The whole suite runs with
   `npm run coverage` against a throwaway PostgreSQL.
-- **Results on 30.10.2026.** 122 tests passed and 2 were skipped (AC-20 and AC-43 need the live URL).
+- **Results on 30.10.2026.** 122 tests passed and 2 were skipped (AC-20 and AC-43, which test the
+  live site). Against the live site, `tests/smoke` passes 3/3, including AC-20 and AC-43.
   Coverage is 98.7% of statements and 96.3% of branches overall. The CI gates are 80% overall and
   100% for `src/services`.
 - **What the coverage does not tell me.**
@@ -100,7 +101,8 @@ edited or deleted (`403`). Last, as `organizer1`, use „Предложи с AI�
     Accessibility 100, CLS 0, Performance 93–100.
   - Whether the real Google sign-in and the real Gemini work. The tests use fakes. I checked both
     by hand with my own keys.
-  - Anything about production, because it is not deployed yet.
+  - Anything about production. For that there are the live tests: AC-20 and AC-43 pass against
+    https://eventhub-5wcj.onrender.com. There is also the rollback drill in `READINESS.md`.
   - `mcp-server/server.js`. It runs as a child process in the tests, so it is not in the numbers.
     `node mcp-server/check.mjs -- node mcp-server/server.js` passes 12/12.
 - **Checked by hand on a production build.**
@@ -115,7 +117,8 @@ edited or deleted (`403`). Last, as `organizer1`, use „Предложи с AI�
 
 From `READINESS.md`, gap list, most dangerous first:
 
-1. It is not deployed yet, so HTTPS, rollback and the live checks are unverified.
+1. Render deploys every push, even when CI is red. The rollback drill showed that a broken setting
+   still passes `/health`. Rolling back took under a minute, but someone has to notice first.
 2. The database pool has no connection timeout: if Neon hangs instead of refusing, requests wait
    with no limit, and the error says "unexpected" instead of "database unavailable".
 3. A leaked `MCP_TOKEN` is that user's session for 7 days, and there is no "sign out everywhere".
@@ -127,7 +130,8 @@ Smaller ones:
 
 - Render's free plan sleeps after 15 minutes without traffic.
 - Google sign-in is in Testing mode, so only listed test users can use it.
-- There is no HTTP compression.
+- The events page waits on three trips in a row, about 2.3 s live, partly because the server is in Oregon.
+- There is no favicon.
 - The model misses the 5 s limit about once in six calls.
 
 ## The thing in this repository I did not write and cannot explain

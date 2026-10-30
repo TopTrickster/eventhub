@@ -59,7 +59,7 @@ parts that need the deployment are marked **Not checked yet** and listed as gap 
 | Failure | What the user sees | How I checked |
 |---|---|---|
 | **Database unreachable** | `/events` shows „Нещо се обърка“, „Възникна неочаквана грешка. Опитайте отново по-късно.“ and an „Опитай отново“ button. No JSON or stack trace. `/health` answers `503 degraded`. The server log line is `[error] GET /api/auth/me: AggregateError (ECONNREFUSED)`: the error type only, no request data. | Started a second copy with `DATABASE_URL=postgres://…@localhost:5499/eventhub` (nothing listens there), opened `/events` in the browser and read the page; the API answered `500` in 4 ms. |
-| **Bad deploy and rollback** | Should be: Render keeps the previous version live when a new deploy fails its health check (`healthCheckPath: /health`). Rollback is Dashboard → the service → Events → Rollback. | **Not checked yet**, because it needs the deployment. To do: deploy a commit that cannot start, see that the old version still answers, roll back, and write down how long it took. |
+| **Bad deploy and rollback** (drill on 30.10.2026) | During the bad deploy, Google sign-in failed: the app sent Google a callback address on another site. Everything else worked. During both deploys the site stayed up. | The drill repeated the real mistake from the first deploy: `APP_BASE_URL` set to `https://eventhub.onrender.com`, then **Save, rebuild and deploy**. Render's Events show the bad deploy starting at 23:26 and live at 23:27. A monitor script checked `/health` and the `redirect_uri` that `/api/auth/google` sends to Google every 5 s. It saw the bad address from **23:27:16**. **Rollback**: Render → Events → "Rollback to" the previous good deploy. It started at 23:29 (it reuses the old build, so there is no build step) and was live by **23:29:48**, when the monitor saw the right address again. **The rollback took under a minute**, and the bad version was live for 2 min 32 s in total, including the time to notice it and click. `/health` was `ok` in all 51 checks, so there was **no downtime**. A Dashboard rollback switches Render's Auto-Deploy off. It must be set back to "On Commit" in Settings, or the next push does not deploy. |
 | **Invalid user input** | A sentence per field next to the field, not a crash. | `POST /api/events` with every field wrong → `400 VALIDATION_ERROR` and 7 field messages (title, description, category, location, capacity, start in the past, end before start). Broken JSON → `400 INVALID_JSON` „Заявката не е валиден JSON.“. AI text of 1 character → `400` „Описанието за AI трябва да е между 10 и 500 символа.“ (no model call). Tests: `tests/api/validation.test.js`. |
 | **Event full / many people racing for the last seat** | „Няма свободни места“ on the event; the server's sentence for a full event. | `tests/data/concurrency.test.js` (AC-7: concurrent registrations never go over capacity); `tests/ui/states.test.jsx` „a full event answers with the server’s sentence“. |
 | **Model provider down or slow** | Section 8: the yellow fallback note, and the form keeps working. | Section 8. |
@@ -99,11 +99,35 @@ transfer size, so nothing came from the cache.
 - **5 requests, Finish 128 ms**, DOMContentLoaded 53 ms. 2 and 3 run in parallel. 4 and 5 are a
   chain: the list is requested only after the session check answers, which adds one round trip.
   On Render and Neon each of those waits is a network round trip, so the live numbers will be larger.
-- The JS is sent uncompressed (294 kB; the build reports 91 kB gzipped). Gap 8.
+- Locally the JS is sent uncompressed (294 kB). On Render it arrives compressed (see below).
 - How I checked: `performance.getEntriesByType('navigation' | 'resource')` in the browser pane right
   after loading the page (start, `responseEnd` and `transferSize` for each request). This is the same
-  data as the Network tab. **Not measured yet on the live URL**: repeat it there in DevTools →
-  Network with "Disable cache" and note the Finish time.
+  data as the Network tab.
+
+**Live, 30.10.2026**, at https://eventhub-5wcj.onrender.com/events. The author's browser (Firefox
+DevTools → Network, **Disable Cache** on, no throttling), signed in as `student1`, from Bulgaria;
+the Render service runs in Oregon.
+
+| # | Request | Type | Time | On the wire (size) | Waits for |
+|---|---|---|---|---|---|
+| 1 | `/events` (HTML) | document | 232 ms | 1.03 kB (599 B) | — |
+| 2 | `/assets/index-….js` | script | 1068 ms | 92.73 kB (293.69 kB) | 1 |
+| 3 | `/assets/index-….css` | stylesheet | 218 ms | 2.98 kB (8.76 kB) | 1 |
+| 4 | `/favicon.ico` | answered with the HTML page | 213 ms | 1.03 kB (599 B) | 1 |
+| 5 | `/api/auth/me` | fetch | 448 ms | 755 B (143 B) | 2 (started by the JS) |
+| 6 | `/api/events` | fetch | 479 ms | 1.39 kB (2.07 kB) | 5 |
+
+- **6 requests. Finish ≈ 2.3 s.** The Finish figure is read off the timeline (its scale ends at 2.56 s
+  and the last request ends shortly before that). The status bar with the exact figure was not in the
+  screenshot.
+- The chain is the same as locally: HTML → JS → session check → list. It now costs about 2.3 s instead
+  of 0.13 s. The JS download (1.07 s) is the longest step. Each API call takes about 0.45 s, which
+  points at the distance to Oregon rather than at the server. Gap 8.
+- Render compresses responses: the 293.69 kB JS travels as 92.73 kB.
+- `/favicon.ico` does not exist, so the client-side-route fallback answers it with `index.html`.
+  It is a wasted request and the wrong content type. Gap 11.
+- How I checked: the author's DevTools screenshot of the Network panel (the request list with the
+  Transferred, Size and timeline columns), read by the agent.
 
 ## 6. Security basics checked
 
@@ -158,12 +182,11 @@ transfer size, so nothing came from the cache.
 
 ## 7. Known gaps, ranked by risk
 
-1. **Parts of the deployment are still unchecked.** It is live, and AC-20, AC-43, HTTPS and `/health`
-   pass, but these are not done yet:
-   - the bad-deploy and rollback test (section 3);
-   - the waterfall on the live URL (section 5).
-
-   Next step: do both, and record the time Render takes to wake up after 15 minutes idle.
+1. **Render deploys every push to `main`, even when CI is red.** Auto-Deploy is "On Commit", so a
+   commit that fails its tests still goes live. Only `/health` stands in the way, and the rollback
+   drill showed that a broken setting passes `/health` (section 3). Rolling back takes under a
+   minute, but someone has to notice first. Next step: Render → Settings → Auto-Deploy →
+   "After CI Checks Pass".
 2. **A database that hangs, instead of refusing, makes requests wait with no limit.** `createPool` in
    `src/data/db.js` sets no `connectionTimeoutMillis`, and the `pg` default is no timeout. Section 3 only
    tested a refused connection, which fails at once. If Neon stops answering, the user sees the
@@ -181,14 +204,18 @@ transfer size, so nothing came from the cache.
    so with two instances an attacker gets twice the attempts. Argon2id still makes each guess slow.
    Next step: store the counters in PostgreSQL if the service ever runs more than one instance.
 6. **Render's free plan stops the service after 15 minutes without traffic**, so the first visitor
-   waits while it starts. Next step: measure that wait on the live URL. Open the site a few minutes
-   before the defence.
+   waits while it starts, and during a demo that looks like a broken site. The wait is not measured
+   yet. Next step: time the first request after 15 idle minutes (`curl -w '%{time_total}' …/health`).
+   Open the site a few minutes before the defence.
 7. **Google sign-in is in "Testing" mode**: only the test users listed in the Google Cloud console can
    use it. Everyone else gets Google's error. Email and password sign-in works for everybody. Next
    step: add the reviewers as test users, or publish the consent screen.
-8. **No HTTP compression.** The JS is 294 kB on the wire instead of about 91 kB (section 5). Next
-   step: check after deployment whether Render compresses responses; if not, add compression
-   middleware (a new dependency, so ask first).
+8. **The events list needs three trips one after another, and the server is far away.** HTML, then
+   JS, then `/api/auth/me`, then `/api/events`. That is about 2.3 s live, against 0.13 s locally
+   (section 5). Each API call costs about 0.45 s from Bulgaria to Oregon. Compression is not the
+   problem: Render already compresses the JS to 93 kB. Next step: start `/api/events` at the same time
+   as the session check, and run Render and Neon in Frankfurt. The region of an existing Render
+   service cannot be changed, so that means a new service with `region: frankfurt` in `render.yaml`.
 9. **The model is sometimes slower than the 5 s limit.** That happened in 2 of 12 calls on 30.10.2026.
    The user then gets the fallback (section 8). That is by design, but it is visible. Next step: count
    fallbacks in the logs after deployment and decide whether the limit or the model should change.
@@ -197,6 +224,9 @@ transfer size, so nothing came from the cache.
     `[oauth] code_rejected`, not Google's own reason (`invalid_client` or `invalid_grant`). That cost
     time on 30.10.2026. Next step: trim the values in `src/config/env.js` and add Google's error code
     to the log line, with a test.
+11. **There is no favicon, so `/favicon.ico` gets the HTML page.** The browser asks for it on every
+    first visit (section 5, request 4). It is harmless but wasteful. Next step: add an icon to the
+    client, and answer `404` for missing files that have an extension, instead of serving `index.html`.
 
 ## 8. Model feature
 
