@@ -1,0 +1,22 @@
+# Технологии: принцип, избор, файл
+
+Карта за защитата (AC-44): за всяка технология — как работи, защо е избрана и кой файл да се отвори.
+`tests/project/defense-map.test.js` проверява, че всеки посочен файл съществува. Това е отправна точка,
+написана от агента; `DEFENSE.md` се пише със собствени думи.
+
+| Технология | Принцип | Защо е избрана (и какво е отхвърлено) | Къде да се види |
+|---|---|---|---|
+| HTTP | Заявка с метод, път, заглавия и тяло; отговорът носи статус. 401 = не сте влезли, 403 = нямате право, 404 = няма го, 409 = нарушено бизнес правило. | Статусите носят смисъл, който UI и тестовете проверяват; грешките са кратки изречения на български, без stack trace. | `src/middleware/errors.js`, `src/routes/events.js` |
+| Express | Верига от middleware функции: security headers, JSON парсване, бисквитки, сесия, маршрути, един обработчик на грешки. | Малък и познат; Express 5 препраща грешките от async handler-и сам. Отхвърлено: по-тежки рамки с собствен DI. | `src/app.js:createApp` |
+| PostgreSQL | Релационна база с външни ключове, UNIQUE и CHECK ограничения; `registrations` е връзката много-към-много. | Истински транзакции и редови заключвания за последното място. Отхвърлено: SQLite (без персистентен диск в Render free). | `migrations/003_create_registrations.sql`, `src/data/eventsRepo.js` |
+| Migrations | Номерирани SQL файлове, всеки в собствена транзакция, записани в `schema_migrations`; изпълнена миграция не се редактира. | Схемата е история в git, а не ръчни промени по базата. Advisory lock пази от две едновременни изпълнения. | `src/data/migrator.js:runMigrations`, `migrations/001_create_users_and_auth.sql` |
+| Transactions | `BEGIN … SELECT … FOR UPDATE … COMMIT`: втората заявка за последното място чака заключването и след това брои вече заетото място. | Без заключване две заявки виждат едно свободно място и двете записват. Брояч в таблицата е отхвърлен: изчислява се от редовете. | `src/services/registrationService.js:registerForEvent`, `tests/data/concurrency.test.js` |
+| Argon2id | Бавен и паметоемък хеш със сол за всяка парола; солта е вътре в хеша. | Изтекла таблица не може да се разбие бързо с GPU. SHA-256 е отхвърлен като твърде бърз. | `src/services/passwords.js`, `src/services/authService.js:login` |
+| Sessions | Случаен 32-байтов токен в HttpOnly, SameSite=Lax бисквитка; в базата е само SHA-256 на токена. Изходът изтрива реда. | Един механизъм за парола, Google и MCP_TOKEN. JWT е отхвърлен: не може да се отмени при изход. | `src/middleware/session.js`, `src/services/authService.js:createSession` |
+| Google OAuth | OpenID Connect authorization code + PKCE + state + nonce, обменът е на сървъра; проверяват се issuer, audience, expiry. | Тайната на клиента не стига до браузъра. Имейл се свързва само при `email_verified=true`. | `src/integrations/googleOAuthClient.js`, `src/services/oauthService.js:signInWithGoogle` |
+| Gemini | REST заявка с JSON схема на отговора, 5 s таймаут; отговорът се валидира срещу дължини и списък категории, иначе детерминиран fallback. | Кратък структуриран изход и прост REST; моделът е зад инжектиран клиент, за да се тества с fake. | `src/integrations/geminiClient.js`, `src/services/eventDraftService.js:createDraft` |
+| MCP | JSON-RPC 2.0 по stdio: initialize, tools/list, tools/call; бизнес грешката е резултат с isError, грешните аргументи са -32602. | Инструментите викат същите сервизни функции като REST и действат като един обикновен потребител (MCP_TOKEN). | `mcp-server/eventhub-tools.js:callEventhubTool`, `tests/mcp/security.test.js` |
+| React | Компоненти и състояние; всеки екран показва loading, empty, error и success. React Router пази адресите. | Познат модел за форми и списъци. SSR е отхвърлен: няма нужда от SEO зад вход. | `client/src/pages/EventsPages.jsx`, `client/src/auth.jsx:RequireAuth` |
+| Vite | Бърз dev сървър (тук като middleware в Express на същия порт) и production build в `dist/client`. | Един origin за API и страници, без CORS за бисквитката. | `vite.config.js`, `src/server.js` |
+| Design tokens | Всички цветове, разстояния, шрифтове и радиуси са CSS променливи; `app.css` използва само тях. | Една скала вместо случайни стойности; контрастът се смята от токените. | `client/src/styles/tokens.css`, `tests/ui/accessibility.test.js` |
+| Vitest | Тестове с AC-N в заглавието срещу истински PostgreSQL (embedded-postgres), Supertest за HTTP, Testing Library за UI; v8 coverage с прагове. | Една команда за всичко; прагът 80% общо и 100% за services чупи build-а. | `vitest.config.js`, `tests/setup/global-db.js` |
