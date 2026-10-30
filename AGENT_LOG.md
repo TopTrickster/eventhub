@@ -70,3 +70,15 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
   - Corrected `APP_BASE_URL` and `GOOGLE_CLIENT_SECRET` on Render.
   - Added the live redirect URI in Google Cloud.
   - Seeded Neon twice from their own PowerShell.
+
+## 2026-10-30 · DEFENSE.md finished
+- Goal: finish the defence notes. The author asked the agent to do this step for them ("I trust you"); the course allows AI for it this year.
+- Delegated: all of `DEFENSE.md`. That is a 5-minute demo plan, the earlier answers updated after the deployment, and short answers to every question in the course's defence question bank (fetched from the course site), each naming the file to open.
+- Checkpoints: claims the agent was not sure of were checked first, not written from memory:
+  - a `text/plain` body gets `400 VALIDATION_ERROR`;
+  - a second cancel gets `404`;
+  - a wrong Gemini key gives the fallback (`provider_status_400`);
+  - the event form has `noValidate`;
+  - both editing and deleting lock the event.
+- Went wrong: the first version said the JSON API "also serves MCP". It does not, because MCP calls the services directly. It also put `withTimeout` in the wrong file. Both were fixed before saving.
+- Changed by hand: nothing. The author has not reviewed the notes yet; the file says they were written by the agent.
